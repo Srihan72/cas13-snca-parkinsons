@@ -1,0 +1,54 @@
+# Large genomic reference files (download locally — not tracked)
+data/human.rna.fna
+data/human.rna.fna.gz
+data/*.fna.gz
+data/*.fa
+data/*.fa.gz
+data/*.fasta.gz
+data/gencode.*
+data/gtex_*
+data/GTEx_*
+data/blastdb/
+
+# BLAST intermediate files
+output/*.xml
+output/*.asn
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs and temp
+*.log
+*.tmp
+*.bak
