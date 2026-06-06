@@ -91,6 +91,10 @@ BASE    = Path(__file__).parent.parent
 OUT_FIG = BASE / "output" / "fig5_aggregation_kinetics.png"
 OUT_CSV = BASE / "output" / "aggregation_kinetics_results.csv"
 
+# Dynamic knockdown outputs (Part 2)
+OUT_FIG_DYN = BASE / "output" / "fig6_dynamic_knockdown.png"
+OUT_CSV_DYN = BASE / "output" / "dynamic_knockdown_results.csv"
+
 # ── Published rate constants ──────────────────────────────────────────────────
 K_N = 3e-4    # primary nucleation rate constant   (hr⁻¹)
 K_E = 1e-2    # elongation rate constant            (hr⁻¹, normalized units)
@@ -130,6 +134,66 @@ CONDITIONS = [
         color    = "#2ca02c",    # green — effective therapeutic intervention
         ls       = "-.",
         lw       = 2.0,
+    ),
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PART 2 — DYNAMIC KNOCKDOWN MODEL
+# ─────────────────────────────────────────────────────────────────────────────
+# Adds explicit monomer production (k_prod) and first-order degradation (k_deg)
+# terms to the ODE system.  Cas13 knockdown is modelled as a fractional
+# reduction in k_prod rather than a static initial condition.
+#
+# Steady-state constraint (no aggregation):
+#   dM/dt = 0  →  M_ss = k_prod / k_deg = 1.0  (normalized)
+#   ∴  k_prod = k_deg
+#
+# α-Synuclein protein half-life ≈ 50 hr in dopaminergic neurons.
+#   Ref: Mak SK, McCormack AL, Manning-Bog AB, Cuervo AM, Di Monte DA.
+#        "Lysosomal degradation of alpha-synuclein in vivo."
+#        J Biol Chem. 2010;285(18):13621-13629.
+#   Ref: Cuervo AM, Stefanis L, Fredenburg R, Lansbury PT, Sulzer D.
+#        "Impaired degradation of mutant alpha-synuclein by chaperone-
+#        mediated autophagy." Science. 2004;305(5688):1292-1295.
+#
+# k_deg = ln(2) / t½ = ln(2) / 50 hr ≈ 0.01386 hr⁻¹
+# k_prod = k_deg so that M_ss = 1.0 (normalized physiological level)
+#
+# Knockdown → k_prod × (1 − knockdown_fraction)
+
+K_DEG  = np.log(2) / 50.0   # protein turnover rate constant  (hr⁻¹)
+K_PROD = K_DEG               # baseline production rate        (hr⁻¹, normalized units)
+
+T_END_DYN  = 500.0     # longer window to capture approach to new steady state
+N_EVAL_DYN = 5001
+
+DYN_CONDITIONS = [
+    dict(
+        label   = "Baseline (no knockdown)",
+        short   = "Baseline",
+        kd_frac = 0.00,
+        pct_kd  = "0%",
+        color   = "#d62728",    # red
+        ls      = "-",
+        lw      = 2.5,
+    ),
+    dict(
+        label   = "50% knockdown",
+        short   = "50% KD",
+        kd_frac = 0.50,
+        pct_kd  = "50%",
+        color   = "#ff7f0e",    # orange
+        ls      = "--",
+        lw      = 2.0,
+    ),
+    dict(
+        label   = "82% knockdown (top gRNA)",
+        short   = "82% KD",
+        kd_frac = 0.82,
+        pct_kd  = "82%",
+        color   = "#2ca02c",    # green
+        ls      = "-.",
+        lw      = 2.0,
     ),
 ]
 
@@ -442,6 +506,265 @@ def print_summary(simulations: list[dict]) -> None:
 """)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PART 2 FUNCTIONS — dynamic knockdown ODE, figure, summary
+# ─────────────────────────────────────────────────────────────────────────────
+
+def snca_ode_dynamic(t: float, y: list[float], kd_frac: float) -> list[float]:
+    """
+    α-Synuclein ODE with monomer production and first-order degradation.
+
+    dM/dt = k_prod*(1 - kd_frac) - k_deg*M - k_n*M² - k_e*M*O - k_2*M*F
+    dO/dt = k_n*M² + k_2*M*F
+    dF/dt = k_e*M*O
+
+    k_prod*(1 - kd_frac) represents Cas13-attenuated SNCA transcription/translation.
+    k_deg*M represents constitutive proteasomal + lysosomal clearance (first-order).
+    """
+    M, O, F = y
+    M = max(M, 0.0)
+    O = max(O, 0.0)
+    F = max(F, 0.0)
+
+    prod    = K_PROD * (1.0 - kd_frac)   # attenuated production
+    deg_M   = K_DEG * M                   # first-order degradation
+    kn_term = K_N * M * M
+    ke_term = K_E * M * O
+    k2_term = K_2 * M * F
+
+    return [
+        prod - deg_M - kn_term - ke_term - k2_term,   # dM/dt
+        kn_term + k2_term,                              # dO/dt
+        ke_term,                                        # dF/dt
+    ]
+
+
+def run_simulation_dynamic(kd_frac: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Solve dynamic ODE from physiological steady state M(0) = 1.0.
+    Knockdown applied at t = 0 (post-treatment trajectory).
+    """
+    t_eval = np.linspace(0.0, T_END_DYN, N_EVAL_DYN)
+    sol = solve_ivp(
+        snca_ode_dynamic,
+        (0.0, T_END_DYN),
+        [1.0, 0.0, 0.0],   # M=1 (steady-state), O=F=0 (no seeds/fibrils)
+        args   = (kd_frac,),
+        method = "Radau",
+        t_eval = t_eval,
+        rtol   = 1e-9,
+        atol   = 1e-12,
+    )
+    if not sol.success:
+        raise RuntimeError(f"Dynamic ODE solver failed (kd_frac={kd_frac}): {sol.message}")
+    return sol.t, sol.y[0], sol.y[1], sol.y[2]
+
+
+def compute_metrics_dynamic(
+    t: np.ndarray, M: np.ndarray, O: np.ndarray, F: np.ndarray,
+    cond: dict,
+) -> dict:
+    total_snca = M + O + F
+    auc_fibril = float(trapezoid(F, t))
+    return {
+        "condition"          : cond["short"],
+        "kd_frac"            : cond["kd_frac"],
+        "pct_kd"             : cond["pct_kd"],
+        "M_ss_predicted"     : round(1.0 - cond["kd_frac"], 4),
+        "M_final"            : round(float(M[-1]), 8),
+        "total_snca_final"   : round(float(total_snca[-1]), 8),
+        "F_final"            : round(float(F[-1]), 8),
+        "AUC_fibril_0_500hr" : round(auc_fibril, 6),
+    }
+
+
+def make_figure_dynamic(simulations_dyn: list[dict]) -> None:
+    """
+    Two-panel publication figure:
+      (a) Total α-synuclein burden (M + O + F) over time
+      (b) Fibril accumulation over time
+    Each panel shows baseline, 50% KD, and 82% KD conditions.
+    """
+    plt.rcParams.update({
+        "font.family"      : "DejaVu Sans",
+        "font.size"        : 11,
+        "axes.linewidth"   : 1.2,
+        "xtick.major.size" : 4,
+        "ytick.major.size" : 4,
+        "xtick.minor.size" : 2,
+        "ytick.minor.size" : 2,
+    })
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6.0), constrained_layout=True)
+    ax_total, ax_fibril = axes
+
+    t_eval   = simulations_dyn[0]["t"]
+    base_M   = simulations_dyn[0]["M"]
+    base_O   = simulations_dyn[0]["O"]
+    base_F   = simulations_dyn[0]["F"]
+    base_tot = base_M + base_O + base_F
+
+    # ── Panel (a): total α-synuclein ──────────────────────────────────────────
+    for sim in simulations_dyn[1:]:
+        cond  = sim["cond"]
+        total = sim["M"] + sim["O"] + sim["F"]
+        prot  = np.maximum(base_tot - total, 0.0)
+        ax_total.fill_between(
+            t_eval, total, base_tot,
+            where=(prot > 1e-12),
+            alpha=0.12, color=cond["color"],
+            label=f"SNCA removed vs baseline ({cond['pct_kd']} KD)",
+        )
+
+    line_handles_total = []
+    for sim in simulations_dyn:
+        cond  = sim["cond"]
+        total = sim["M"] + sim["O"] + sim["F"]
+        lh, = ax_total.plot(
+            sim["t"], total,
+            color=cond["color"], ls=cond["ls"], lw=cond["lw"],
+            label=cond["label"],
+        )
+        line_handles_total.append(lh)
+
+    ax_total.set_xlabel("Time (hours)", fontsize=12, labelpad=5)
+    ax_total.set_ylabel("Total α-synuclein (normalized)", fontsize=12, labelpad=5)
+    ax_total.set_title("(a) Total α-Synuclein Burden Over Time", fontsize=12, fontweight="bold")
+    ax_total.set_xlim(0.0, T_END_DYN)
+    ax_total.set_ylim(bottom=0.0)
+    ax_total.xaxis.set_minor_locator(ticker.AutoMinorLocator(4))
+    ax_total.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
+    ax_total.grid(True, which="major", ls="--", lw=0.55, alpha=0.45, color="grey")
+    ax_total.grid(True, which="minor", ls=":",  lw=0.35, alpha=0.25, color="grey")
+    ax_total.legend(fontsize=8.5, loc="upper right", framealpha=0.94, edgecolor="0.75")
+
+    # ── Panel (b): fibril accumulation ────────────────────────────────────────
+    for sim in simulations_dyn[1:]:
+        cond = sim["cond"]
+        prot = np.maximum(base_F - sim["F"], 0.0)
+        ax_fibril.fill_between(
+            t_eval, sim["F"], base_F,
+            where=(prot > 1e-12),
+            alpha=0.12, color=cond["color"],
+        )
+
+    for sim in simulations_dyn:
+        cond = sim["cond"]
+        ax_fibril.plot(
+            sim["t"], sim["F"],
+            color=cond["color"], ls=cond["ls"], lw=cond["lw"],
+            label=cond["label"],
+        )
+
+    ax_fibril.set_xlabel("Time (hours)", fontsize=12, labelpad=5)
+    ax_fibril.set_ylabel("Fibril concentration (normalized)", fontsize=12, labelpad=5)
+    ax_fibril.set_title("(b) Fibril Accumulation", fontsize=12, fontweight="bold")
+    ax_fibril.set_xlim(0.0, T_END_DYN)
+    ax_fibril.set_ylim(bottom=0.0)
+    ax_fibril.xaxis.set_minor_locator(ticker.AutoMinorLocator(4))
+    ax_fibril.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
+    ax_fibril.grid(True, which="major", ls="--", lw=0.55, alpha=0.45, color="grey")
+    ax_fibril.grid(True, which="minor", ls=":",  lw=0.35, alpha=0.25, color="grey")
+    ax_fibril.legend(fontsize=8.5, loc="upper left", framealpha=0.94, edgecolor="0.75")
+
+    fig.suptitle(
+        "Dynamic Cas13 SNCA Knockdown: Monomer Production–Degradation ODE Model\n"
+        r"Knockdown modelled as fractional reduction in production rate $k_{prod}$",
+        fontsize=13, fontweight="bold",
+    )
+
+    caption = (
+        r"$k_{prod}$ = $k_{deg}$ = $\ln 2\,/\,$50 hr⁻¹ ≈ 0.01386 hr⁻¹  "
+        r"(50 hr half-life;  Mak et al. 2010 J Biol Chem;  Cuervo et al. 2004 Science)"
+    )
+    for ax in axes:
+        ax.text(
+            0.99, 0.03, caption,
+            transform=ax.transAxes, ha="right", va="bottom",
+            fontsize=6.5, color="0.45", style="italic",
+        )
+
+    fig.savefig(OUT_FIG_DYN, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"\n  Figure saved → {OUT_FIG_DYN}")
+
+
+def print_summary_dynamic(simulations_dyn: list[dict]) -> None:
+    rows = [s["metrics"] for s in simulations_dyn]
+    base = rows[0]
+
+    def pct_red(a, b):
+        return round((1.0 - a / b) * 100, 2) if b > 1e-15 else 0.0
+
+    for row in rows:
+        row["total_snca_reduction_pct"] = pct_red(row["total_snca_final"],   base["total_snca_final"])
+        row["monomer_reduction_pct"]    = pct_red(row["M_final"],             base["M_final"])
+        row["fibril_AUC_reduction_pct"] = pct_red(row["AUC_fibril_0_500hr"], base["AUC_fibril_0_500hr"])
+
+    df = pd.DataFrame(rows)
+    df.to_csv(OUT_CSV_DYN, index=False)
+    print(f"  Results saved → {OUT_CSV_DYN}\n")
+
+    # ── Summary table ──────────────────────────────────────────────────────────
+    print("=" * 85)
+    print(f"DYNAMIC KNOCKDOWN SUMMARY  (t = 0 – {T_END_DYN:.0f} hr)")
+    print("=" * 85)
+    hdr = (
+        f"{'Condition':<22} {'KD':>4}  {'M_ss':>6}  {'M_final':>9}"
+        f"  {'Total_final':>11}  {'F_final':>9}  {'Fibril AUC':>12}"
+    )
+    print(hdr)
+    print("-" * 85)
+    for row in rows:
+        print(
+            f"{row['condition']:<22} {row['pct_kd']:>4}"
+            f"  {row['M_ss_predicted']:>6.2f}"
+            f"  {row['M_final']:>9.6f}"
+            f"  {row['total_snca_final']:>11.6f}"
+            f"  {row['F_final']:>9.6f}"
+            f"  {row['AUC_fibril_0_500hr']:>12.4f}"
+        )
+
+    print()
+    print("Reductions relative to baseline at final timepoint:")
+    print("-" * 65)
+    for row in rows[1:]:
+        print(f"\n  {row['condition']}  ({row['pct_kd']} knockdown):")
+        print(f"    Total α-synuclein reduction : −{row['total_snca_reduction_pct']:.1f}%")
+        print(f"    Monomer reduction           : −{row['monomer_reduction_pct']:.1f}%")
+        print(f"    Fibril burden (AUC) reduction: −{row['fibril_AUC_reduction_pct']:.1f}%")
+
+    print()
+    print("=" * 85)
+    print("DYNAMIC MODEL INTERPRETATION")
+    print("=" * 85)
+    print(f"""
+  All conditions start identically (M₀ = 1.0, O = F = 0). Knockdown acts
+  immediately as a reduction in SNCA production rate k_prod; the existing
+  monomer pool is cleared by normal protein turnover (t½ ≈ 50 hr).
+
+  The monomer level relaxes to a new steady state on the turnover timescale
+  (~3–5 half-lives = 150–250 hr).  Predicted new steady-state monomer:
+    •  50% KD  →  M_ss ≈ 0.50
+    •  82% KD  →  M_ss ≈ 0.18
+
+  Aggregation is suppressed because:
+    1.  Primary nucleation ∝ M²  — a falling M doubly suppresses seed formation.
+    2.  Secondary nucleation ∝ M × F  — autocatalytic loop is doubly weakened.
+
+  The 82% knockdown prevents meaningful fibril formation: while M is
+  transitioning from 1.0 → 0.18 the nucleation rate is already negligible,
+  and at the new steady state it is negligible indefinitely.
+
+  ⚠ LIMITATIONS:
+    •  Instantaneous onset assumed; in vivo, AAV delivery and Cas13 expression
+       have pharmacokinetic delays not captured here.
+    •  Pre-existing aggregates are not cleared by this model.
+    •  Turnover constants from in vitro / rodent data; human neuronal
+       α-synuclein kinetics may differ.
+""")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     print("=" * 65)
@@ -467,6 +790,35 @@ def main() -> None:
 
     make_figure(simulations)
     print_summary(simulations)
+
+    # ── Part 2: dynamic knockdown analysis ────────────────────────────────────
+    print()
+    print("=" * 65)
+    print("α-Synuclein Dynamic Knockdown ODE Simulation")
+    print(f"  k_prod = k_deg = {K_PROD:.5f} hr⁻¹  (t½ = 50 hr)   "
+          f"T = {T_END_DYN:.0f} hr")
+    print("=" * 65)
+
+    simulations_dyn: list[dict] = []
+
+    for cond in DYN_CONDITIONS:
+        kd = cond["kd_frac"]
+        print(
+            f"\n[{cond['short']}]  kd_frac = {kd}  "
+            f"→  k_prod = {K_PROD * (1.0 - kd):.5f} hr⁻¹"
+        )
+        t, M, O, F = run_simulation_dynamic(kd)
+        metrics = compute_metrics_dynamic(t, M, O, F, cond)
+        simulations_dyn.append(
+            {"t": t, "M": M, "O": O, "F": F, "cond": cond, "metrics": metrics}
+        )
+        print(f"  M_final           : {metrics['M_final']:.6f}")
+        print(f"  Total SNCA final  : {metrics['total_snca_final']:.6f}")
+        print(f"  F_final           : {metrics['F_final']:.8f}")
+        print(f"  Fibril AUC        : {metrics['AUC_fibril_0_500hr']:.6f}")
+
+    make_figure_dynamic(simulations_dyn)
+    print_summary_dynamic(simulations_dyn)
 
 
 if __name__ == "__main__":

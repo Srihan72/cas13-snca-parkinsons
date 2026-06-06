@@ -1,0 +1,4 @@
+condition,kd_frac,pct_kd,M_ss_predicted,M_final,total_snca_final,F_final,AUC_fibril_0_500hr,total_snca_reduction_pct,monomer_reduction_pct,fibril_AUC_reduction_pct
+Baseline,0.0,0%,1.0,0.86737684,1.43469192,0.37958158,61.634649,0.0,0.0,0.0
+50% KD,0.5,50%,0.5,0.47628759,0.61330007,0.08078338,15.832506,57.25,45.09,74.31
+82% KD,0.82,82%,0.18,0.17749792,0.21461184,0.01804695,4.805221,85.04,79.54,92.2
