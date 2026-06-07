@@ -277,6 +277,8 @@ def fig_blast_hits(ranked: pd.DataFrame):
     off-target hits (≤3 mm), and 'clean' (no hits) per candidate."""
 
     df = ranked.head(30).copy()    # top 30 for readability
+    df["snca_self_hits"] = df["snca_self_hits"].abs()
+    df["offtarget_hits"] = df["offtarget_hits"].abs()
     df["total_hits_reported"] = df["snca_self_hits"] + df["offtarget_hits"]
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
@@ -290,6 +292,7 @@ def fig_blast_hits(ranked: pd.DataFrame):
                  bottom=df["snca_self_hits"],
                  color=ACCENT, label="Off-target hits (≤3 mm)",
                  edgecolor="white", linewidth=0.4, zorder=3)
+    ax.set_ylim(bottom=0)
 
     ax.set_xticks(x)
     ax.set_xticklabels([f"#{r}" for r in df["rank"]], fontsize=7.5, rotation=45, ha="right")
@@ -318,6 +321,7 @@ def fig_blast_hits(ranked: pd.DataFrame):
         ranked["predicted_efficiency"],
         c=colors_pt, s=55, alpha=0.75, edgecolors="none", zorder=3,
     )
+    ax2.set_ylim(bottom=0)
     ax2.set_xlabel("Off-target Hit Count (≤3 mismatches)")
     ax2.set_ylabel("Predicted Knockdown Efficiency")
     ax2.set_title("Off-target Hits vs Predicted Efficiency\n(all 100 candidates)",
