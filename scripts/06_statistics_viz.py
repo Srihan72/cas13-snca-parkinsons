@@ -192,11 +192,6 @@ def fig_accessibility_scatter(ranked: pd.DataFrame):
     ax.plot(x_line, m * x_line + b, color=ACCENT, linewidth=1.5,
             linestyle="--", zorder=3, alpha=0.85)
 
-    ax.text(0.03, 0.97,
-            f"Pearson r = {r_val:.3f},  p = {p_val:.2e}",
-            transform=ax.transAxes, va="top", ha="left",
-            fontsize=9, bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
-
     cbar = fig.colorbar(sc, ax=ax, pad=0.02, shrink=0.85)
     cbar.set_label("MFE (kcal/mol)", fontsize=9)
 
@@ -204,7 +199,12 @@ def fig_accessibility_scatter(ranked: pd.DataFrame):
     ax.set_ylabel("Predicted Knockdown Efficiency")
     ax.set_title("RNA Accessibility vs Predicted Efficiency\n(100 BLAST-screened candidates)",
                  fontweight="bold")
-    ax.legend(loc="lower right", framealpha=0.9)
+    ax.legend(loc="lower right", bbox_to_anchor=(0.99, 0.20), framealpha=0.9)
+
+    ax.text(0.97, 0.03,
+            f"Pearson r = {r_val:.3f},  p = {p_val:.2e}",
+            transform=ax.transAxes, va="bottom", ha="right",
+            fontsize=9, bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
 
     fig.tight_layout()
     path = OUT_DIR / "fig2_accessibility_scatter.png"
