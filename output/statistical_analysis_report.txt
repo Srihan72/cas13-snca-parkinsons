@@ -1,0 +1,76 @@
+==============================================================================
+SNCA CAS13 gRNA PIPELINE — STATISTICAL ANALYSIS REPORT
+==============================================================================
+Ranked candidates  : final_ranked_candidates.csv  (n = 100)
+Full candidate set : grna_candidates_predicted.csv  (n = 2500)
+
+==============================================================================
+1. BOOTSTRAP CONFIDENCE INTERVALS — TOP 10 CANDIDATES
+==============================================================================
+Method: percentile bootstrap, 10,000 resamples per candidate, residual
+noise ~ N(0, 0.0360) derived from the XGBoost regressor's 5-fold
+CV MAE (0.0287); see scripts 03/06.
+
+Top candidate #1: predicted KD = 82.0% (95% CI: 75.0% - 89.2%, n=10,000 bootstrap iterations)
+Top candidate #2: predicted KD = 82.1% (95% CI: 75.1% - 89.2%, n=10,000 bootstrap iterations)
+Top candidate #3: predicted KD = 82.0% (95% CI: 75.0% - 89.2%, n=10,000 bootstrap iterations)
+Top candidate #4: predicted KD = 81.9% (95% CI: 74.8% - 89.0%, n=10,000 bootstrap iterations)
+Top candidate #5: predicted KD = 81.8% (95% CI: 74.8% - 88.9%, n=10,000 bootstrap iterations)
+Top candidate #6: predicted KD = 81.7% (95% CI: 74.7% - 88.8%, n=10,000 bootstrap iterations)
+Top candidate #7: predicted KD = 81.7% (95% CI: 74.6% - 88.8%, n=10,000 bootstrap iterations)
+Top candidate #8: predicted KD = 81.6% (95% CI: 74.5% - 88.7%, n=10,000 bootstrap iterations)
+Top candidate #9: predicted KD = 81.6% (95% CI: 74.4% - 88.7%, n=10,000 bootstrap iterations)
+Top candidate #10: predicted KD = 81.5% (95% CI: 74.5% - 88.5%, n=10,000 bootstrap iterations)
+
+==============================================================================
+2. MANN-WHITNEY U TEST — PREDICTED EFFICIENCY, CDS vs 3'UTR
+==============================================================================
+CDS    : n =  467   median = 0.7327
+3'UTR  : n = 2021   median = 0.7290
+
+U statistic               : 524068.0
+p-value                   : 1.928e-04  (significant at α = 0.05)
+Rank-biserial correlation : -0.1105
+
+==============================================================================
+3. COHEN'S d — PREDICTED EFFICIENCY, CDS vs 3'UTR
+==============================================================================
+Cohen's d               : -0.2960  (small effect)
+Mean(CDS) - Mean(3'UTR) : -0.0405
+
+==============================================================================
+4. ACCESSIBILITY vs PREDICTED EFFICIENCY — ALL 2,500 CANDIDATES
+==============================================================================
+Pearson  r   = +0.0120   p = 5.490e-01
+             95% CI (Fisher z-transform): [-0.0272, +0.0512]
+
+Spearman rho = +0.0845   p = 2.334e-05
+             95% CI (percentile bootstrap, n=10,000): [+0.0459, +0.1237]
+
+==============================================================================
+5. ONE-SAMPLE t-TESTS — EACH REGION vs OVERALL MEAN
+==============================================================================
+Overall mean predicted efficiency (n = 2,500): 0.6769
+
+5'UTR   n =   12   mean = 0.6017   95% CI on mean: [0.4597, 0.7438]
+        t = -1.164   p = 2.691e-01  (not significant at α = 0.05)
+CDS     n =  467   mean = 0.6443   95% CI on mean: [0.6281, 0.6605]
+        t = -3.947   p = 9.139e-05  (significant at α = 0.05)
+3'UTR   n = 2021   mean = 0.6848   95% CI on mean: [0.6794, 0.6903]
+        t = +2.856   p = 4.331e-03  (significant at α = 0.05)
+
+==============================================================================
+6. PAIRWISE BONFERRONI-CORRECTED t-TESTS BETWEEN REGIONS
+==============================================================================
+Welch's t-test (unequal variances), Bonferroni-corrected α = 0.0167
+
+5'UTR vs CDS
+  t = -0.654   p = 5.260e-01   p_corrected = 1.000e+00  [ns]
+  mean diff = -0.0426   95% CI on difference: [-0.1853, +0.1001]
+5'UTR vs 3'UTR
+  t = -1.286   p = 2.247e-01   p_corrected = 6.742e-01  [ns]
+  mean diff = -0.0831   95% CI on difference: [-0.2253, +0.0591]
+CDS vs 3'UTR
+  t = -4.654   p = 4.043e-06   p_corrected = 1.213e-05  [*]
+  mean diff = -0.0405   95% CI on difference: [-0.0576, -0.0234]
+
