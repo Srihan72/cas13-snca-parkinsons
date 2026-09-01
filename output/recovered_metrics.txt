@@ -1,0 +1,85 @@
+================================================================================
+RECOVERED STDOUT METRICS — SNCA CAS13 gRNA PIPELINE
+Recovered by re-running scripts/01_grna_generation.py and
+scripts/03_xgboost_model.py against the existing repository inputs
+(data/snca.fasta and data/41587_2020_456_MOESM3_ESM.xlsx).
+Both scripts already contained the necessary print statements; script 03's
+print statements were extended with additional full-precision lines
+(repr() output) so exact stored precision could be captured without
+rounding. No filter logic, thresholds, model hyperparameters, random_state,
+or cross-validation setup were changed in either script.
+
+Verification performed before trusting these numbers:
+  - output/grna_candidates.csv (script 01's output) re-generated and
+    byte-for-byte IDENTICAL to the version already in the repository.
+  - output/grna_candidates_predicted.csv (script 03's output) re-generated
+    and byte-for-byte IDENTICAL to the version already in the repository.
+  - models/xgboost_efficiency.json re-generated and byte-for-byte IDENTICAL
+    to the version already in the repository.
+  → Both re-runs are fully reproducible; no discrepancy from the original
+    pipeline run was found.
+================================================================================
+
+
+================================================================================
+TASK 1 — gRNA FILTER CASCADE COUNTS (scripts/01_grna_generation.py)
+================================================================================
+Input sequence : NM_000345.4 (3177 nt), data/snca.fasta
+
+  Initial 23-mers scanned (both strands, N-free)  : 6310
+  After PFS filter (no 3' G)                      : 5109   (1201 removed)
+  After GC content filter (30-70%)                : 3509   (1600 removed)
+  After homopolymer filter (no run >= 4)           : 2500   (1009 removed)
+
+  Final candidate count                            : 2500
+
+CONFIRMATION: Final count = 2500, matching the value used consistently
+throughout the entire downstream pipeline (scripts 02-06, 10) and the
+row count of the existing output/grna_candidates.csv. NO DISCREPANCY.
+
+
+================================================================================
+TASK 2 — XGBOOST 5-FOLD CROSS-VALIDATION METRICS (scripts/03_xgboost_model.py)
+================================================================================
+Training data: data/41587_2020_456_MOESM3_ESM.xlsx, sheet "HEK293T_screen"
+  (Wessels et al. 2020), 120 training rows, 24 features, 5-fold KFold
+  (shuffle=True, random_state=42), XGBoost hyperparameters unchanged
+  (n_estimators=300, max_depth=4, learning_rate=0.05, subsample=0.8,
+  colsample_bytree=0.8, min_child_weight=3, reg_alpha=0.1, reg_lambda=1.0,
+  random_state=42, tree_method="hist").
+
+Per-fold R2 and MAE (exact stored double precision, via Python repr()):
+
+  Fold 1:  R2  = 0.9750206659185078
+           MAE = 0.028361109472306568
+
+  Fold 2:  R2  = 0.9767734158139072
+           MAE = 0.028661252036205925
+
+  Fold 3:  R2  = 0.9654136725199703
+           MAE = 0.03189639060037931
+
+  Fold 4:  R2  = 0.9821034307154788
+           MAE = 0.022162281588649756
+
+  Fold 5:  R2  = 0.961642154490872
+           MAE = 0.03231573552298545
+
+5-fold CV summary (exact stored double precision):
+
+  Mean R2  = 0.9721906678917472
+  Std  R2  = 0.0075428394572152275
+  (displayed at 4 decimals by the script: R2 = +0.9722 +/- 0.0075)
+
+  Mean MAE = 0.028679353844105405
+  Std  MAE = 0.0036372086864564827
+  (displayed at 4 decimals by the script: MAE = 0.0287 +/- 0.0036)
+
+CONFIRMATION: Mean MAE = 0.028679353844105405, which rounds to 0.0287 at
+4 decimal places — CONSISTENT with the CV_MAE = 0.0287 constant hardcoded
+downstream in scripts/06_statistics_viz.py and scripts/10_statistical_analysis.py
+and used throughout output/statistical_analysis_report.txt. NO DISCREPANCY.
+
+================================================================================
+END OF RECOVERED METRICS
+================================================================================

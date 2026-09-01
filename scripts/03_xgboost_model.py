@@ -176,9 +176,14 @@ def main():
         r2_list.append(r2)
         mae_list.append(mae)
         print(f"  Fold {fold}:  R² = {r2:+.4f}   MAE = {mae:.4f}")
+        print(f"    [full precision]  R² = {r2!r}   MAE = {mae!r}")
 
     print(f"\n  Mean :  R² = {np.mean(r2_list):+.4f} ± {np.std(r2_list):.4f}"
           f"   MAE = {np.mean(mae_list):.4f} ± {np.std(mae_list):.4f}")
+    print(f"  [full precision]  Mean R² = {np.mean(r2_list)!r}  "
+          f"Std R² = {np.std(r2_list)!r}")
+    print(f"  [full precision]  Mean MAE = {np.mean(mae_list)!r}  "
+          f"Std MAE = {np.std(mae_list)!r}")
 
     # ── 5. Train on full data & save ─────────────────────────────────────────
     print("\nRetraining on full dataset…")
